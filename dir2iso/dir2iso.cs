@@ -10,9 +10,10 @@ class IsoImage
 
 	static int Main(string[] args)
 	{
-		if (args.Length != 3)
+		if (args.Length < 3 || args.Length > 4)
 		{
-			Console.WriteLine("dir2iso <myOutIsoFile.iso> <myVolumeName> <sourceDirectory>");
+			Console.WriteLine("dir2iso <MyOutIsoFile.iso> <MyVolumeName> <SourceDirectory> (optional)<FileSystemsToCreate>");
+			Console.WriteLine("\n<FileSystemsToCreate> bitfield: Default is: 3 (Joliet | ISO9660) if left blank\n1: ISO9660\n2: Joliet\n4: UDF");
 			return -1;
 		}
 
@@ -20,12 +21,33 @@ class IsoImage
 		var volumeName = args[1];
 		var path = args[2];
 
-		Console.WriteLine("Creating Volume: {0} from path: {1} to {2}", volumeName, path, isoFilePath);
+		int fileSystemOption = 3/*FsiFileSystemJoliet | FsiFileSystemISO9660*/;
+
+		if (args.Length > 3)
+        {
+			try
+			{
+				fileSystemOption = Convert.ToInt32(args[3]);
+
+				// Somehow there is no Math.Clamp() in C# !!! Math.Clamp(fileSystemOption, 1, 7)
+				fileSystemOption = Math.Max(Math.Min(fileSystemOption, 7), 1);
+
+				// if FsiFileSystemJoliet is enabled, ISO9660 must be enabled as well, otherwise the IMAPI crashes!
+				fileSystemOption |= ((fileSystemOption >> 1) & 1);
+			}
+			catch (Exception e)
+			{
+				Console.WriteLine("FileSystemsToCreate should be a number between 1..7");
+				Console.WriteLine("EXCEPTION: " + e.Message + e.StackTrace);
+			}
+		}
+
+		Console.WriteLine("Creating Volume: {0} from path: {1} to {2} with filesystem option: {3}", volumeName, path, isoFilePath, fileSystemOption);
 		Stopwatch stopWatch = Stopwatch.StartNew();
 
 		dynamic image = Activator.CreateInstance(Type.GetTypeFromProgID("IMAPI2FS.MsftFileSystemImage"));
 		image.ChooseImageDefaultsForMediaType(12/*IMAPI_MEDIA_TYPE_DISK*/);
-		image.FileSystemsToCreate = 3/*FsiFileSystemJoliet | FsiFileSystemISO9660*/;
+		image.FileSystemsToCreate = fileSystemOption;
 		image.VolumeName = volumeName;
 		image.Root.AddTree(path, false);
 		var resultImage = image.CreateResultImage();
